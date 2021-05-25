@@ -30,7 +30,10 @@ func NewMessage(event, name, content string) *Message {
 
 //由於透過 WebSocket 傳送訊息要使用 []byte 格式，因此這邊我們也將轉換的方法進行封裝
 func (m *Message) GetByteMessage() []byte {
-	result, _ := json.Marshal(m)
+	result, err := json.Marshal(m)
+	if err != nil {
+		fmt.Println(err)
+	}
 	return result
 }
 
@@ -61,22 +64,21 @@ func main() {
 
 		//如果第一個是斜線
 		if string(cmd[0]) == "/" {
+			const KEY = "user_id"
 			// 執行指令
 			if string(cmd[1:len(string(cmd))]) == "info" {
-				id := s.Request.URL.Query().Get("id")
-				tt := DefaultRoomManager.UUIDMap[id]
-				mm := strconv.Itoa(tt.money)
-				rr := strconv.Itoa(tt.room.roomID)
-				time:=tt.checkInTime.Format("2006-01-02 15:04:05")
-				
-				// server.Broadcast(NewMessage("other", id, "名字:"+id+",金錢:"+mm+"房間:"+rr).GetByteMessage())
-				const KEY = "user_id"
-				server.BroadcastFilter(NewMessage("other", id, "名字:"+id+", 金錢:"+mm+", 房間:"+rr+", 入住時間:"+time).GetByteMessage(), func(session *melody.Session) bool {
-					compareID, _ := session.Get(KEY)
-					return compareID == "user_id" || compareID == id
-				})
+
+				DefaultRoomManager.infoHandler(server, s, KEY)
+
+			} else if string(cmd[1:len(string(cmd))]) == "室友" {
+
+				DefaultRoomManager.roommateHandler(server, s, KEY)
+
+			} else if string(cmd[1:len(string(cmd))]) == "time" {
+
+				DefaultRoomManager.checkOutTimeHandler(server, s, KEY)
+
 			} else {
-				const KEY = "user_id"
 				server.BroadcastFilter(NewMessage("other", id, "指令錯誤").GetByteMessage(), func(session *melody.Session) bool {
 					compareID, _ := session.Get(KEY)
 					return compareID == "user_id" || compareID == id
@@ -88,7 +90,7 @@ func main() {
 			// 查傳資料的房客在哪間房間
 			r := DefaultRoomManager.findUserRoom(id)
 			aa := strconv.Itoa(r.roomID)
-			id := "room10" + aa
+			id := "room_" + aa
 			server.BroadcastFilter(msg, func(session *melody.Session) bool {
 				compareID, _ := session.Get(KEY)
 				return compareID == "chat_id" || compareID == id
@@ -102,17 +104,21 @@ func main() {
 		// 取得名字
 		id := session.Request.URL.Query().Get("id")
 
-		const KEY = "byebye"
+		// 有人進入就登記他的id
+		const KEY = "user_id"
 		session.Set(KEY, id)
 
+		// 預設值金錢
 		money := 1000
+		// 現在時間
 		t := time.Now().Format("2006-01-02 15:04:05")
 
+		// 當旅館滿人進入
 		if len(DefaultRoomManager.UUIDMap) >= 8 {
 			fmt.Println("目前人數", len(DefaultRoomManager.UUIDMap), "超過人數(最多8人),無法入住")
 			server.BroadcastFilter(NewMessage("other", id, "因為客滿被踢出").GetByteMessage(), func(session *melody.Session) bool {
 				compareID, _ := session.Get(KEY)
-				return compareID == "byebye" || compareID == id
+				return compareID == "user_id" || compareID == id
 			})
 			time.Sleep(time.Millisecond * 300)
 			session.Close()
@@ -130,6 +136,9 @@ func main() {
 
 		server.Broadcast(NewMessage("other", id, "加入聊天室,房間號碼："+room+",時間："+t).GetByteMessage())
 
+		// 提醒退房,第三個是秒數
+		go remindToCheckOut(server, id, 30)
+
 	})
 
 	// 連線結束
@@ -138,15 +147,46 @@ func main() {
 	server.HandleClose(func(session *melody.Session, i int, s string) error {
 
 		id := session.Request.URL.Query().Get("id")
-		DefaultRoomManager.SignOutMember(id)
-		if !DefaultRoomManager.findUser(id) {
-			// server.Broadcast(NewMessage("other", id, "因為客滿而離開聊天室").GetByteMessage())
+		const KEY = "chat_id"
+
+		if DefaultRoomManager.findUser(id) {
+			room := "room_" + strconv.Itoa(DefaultRoomManager.UUIDMap[id].room.roomID)
+
+			server.BroadcastFilter(NewMessage("other", id, "離開聊天室").GetByteMessage(), func(session *melody.Session) bool {
+				compareID, _ := session.Get(KEY)
+				return compareID == "chat_id" || compareID == room
+			})
+
 		} else {
-			server.Broadcast(NewMessage("other", id, "離開聊天室").GetByteMessage())
+			// server.Broadcast(NewMessage("other", id, "因為客滿而離開聊天室").GetByteMessage())
 		}
+
+		DefaultRoomManager.SignOutMember(id)
 		return nil
 	})
 
 	// 監聽
 	r.Run(":5000")
+}
+
+func closeLineHandler() {
+
+}
+
+func remindToCheckOut(server *melody.Melody, id string, count int) {
+	// 計時30秒,30秒後傳訊息給旅客,提醒退房
+	const KEY = "user_id"
+	DefaultRoomManager.UUIDMap[id].checkOutTime = DefaultRoomManager.UUIDMap[id].checkInTime.Add(time.Duration(count) * time.Second)
+	timer := time.NewTimer(time.Duration(count) * time.Second)
+
+	// Current time
+	// now := time.Now()
+	// fmt.Printf("time : %v.\n", now)
+
+	<-timer.C
+	// fmt.Printf("time : %v.\n", expire)
+	server.BroadcastFilter(NewMessage("other", id, id+"退房時間到了").GetByteMessage(), func(session *melody.Session) bool {
+		compareID, _ := session.Get(KEY)
+		return compareID == "user_id" || compareID == id
+	})
 }

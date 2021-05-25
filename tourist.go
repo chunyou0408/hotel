@@ -8,27 +8,24 @@ import (
 
 // Tourist 旅人
 type Tourist struct {
-	name       string // 名字
-	money      int    // 錢
-	room       *Room  // 住哪間房間
-	uuIdentity string // uuid識別子
-	checkInTime time.Time
-	session    *melody.Session
+	name         string // 名字
+	money        int    // 錢
+	room         *Room  // 住哪間房間
+	uuIdentity   string // uuid識別子
+	checkInTime  time.Time
+	checkOutTime time.Time
+	session      *melody.Session
 }
 
 // 新的旅客
 func NewTourist(id string, money int, session *melody.Session) *Tourist {
 
-	const KEY = "user_id"
-	session.Set(KEY, id)
-
 	t := &Tourist{
-		name:       id,
-		money:      1000,
-		uuIdentity: id,
-		checkInTime: time.Now(),
-		session:    session,
-		
+		name:         id,
+		money:        1000,
+		uuIdentity:   id,
+		checkInTime:  time.Now(),
+		session:      session,
 	}
 
 	return t
