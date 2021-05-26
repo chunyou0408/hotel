@@ -132,8 +132,8 @@ func getMessage(s *melody.Session, msg []byte) {
 		const KEY = "chat_id"
 		// 查傳資料的房客在哪間房間
 		r := DefaultRoomManager.findUserRoom(id)
-		aa := strconv.Itoa(r.roomID)
-		id := "room_" + aa
+		roomID := strconv.Itoa(r.roomID)
+		id := "room_" + roomID
 		server.BroadcastFilter(msg, func(session *melody.Session) bool {
 			compareID, _ := session.Get(KEY)
 			return compareID == "chat_id" || compareID == id
