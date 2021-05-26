@@ -72,72 +72,29 @@ func main() {
 
 func remindToCheckOut(id string, count int) {
 	// 計時30秒,30秒後傳訊息給旅客,提醒退房
-	const KEY = "user_id"
+
 	DefaultRoomManager.UUIDMap[id].checkOutTime = DefaultRoomManager.UUIDMap[id].checkInTime.Add(time.Duration(count) * time.Second)
 	timer := time.NewTimer(time.Duration(count) * time.Second)
 
-	// Current time
-	// now := time.Now()
-	// fmt.Printf("time : %v.\n", now)
-
 	<-timer.C
-	// fmt.Printf("time : %v.\n", expire)
-	server.BroadcastFilter(NewMessage("other", id, id+"退房時間到了").GetByteMessage(), func(session *melody.Session) bool {
-		compareID, _ := session.Get(KEY)
-		return compareID == "user_id" || compareID == id
-	})
+	timer.Stop() //時間到之後停止
+
+	text := id + "退房時間到了"
+	sentMessageTo(id, nil, text, "user")
 }
 
 // 收到訊息後處理
 func getMessage(s *melody.Session, msg []byte) {
-	// 取得名字
-	id := s.Request.URL.Query().Get("id")
-	// 顯示內容
+
 	cmd := gjson.Get(string(msg), "content").String()
-	fmt.Println(cmd)
-
-	//如果第一個是斜線
+	// 如果開頭是"/",就代表是指令
+	// 否則廣播房間內所有人訊息
 	if string(cmd[0]) == "/" {
-		const KEY = "user_id"
-		commend := string(cmd[1:len(string(cmd))])
-		// 執行指令
-		if commend == "info" {
-
-			DefaultRoomManager.infoHandler(s, KEY)
-
-		} else if commend == "室友" {
-
-			DefaultRoomManager.roommateHandler(s, KEY)
-
-		} else if commend == "time" {
-
-			DefaultRoomManager.checkOutTimeHandler(s, KEY)
-
-		} else if commend == "addmoney" {
-
-			DefaultRoomManager.addMoneyHandler(s, KEY)
-
-		} else if commend == "help" {
-
-			DefaultRoomManager.helpHandler(s, KEY)
-
-		} else {
-			server.BroadcastFilter(NewMessage("other", id, "指令錯誤,可輸入/help查看指令").GetByteMessage(), func(session *melody.Session) bool {
-				compareID, _ := session.Get(KEY)
-				return compareID == "user_id" || compareID == id
-			})
-		}
+		Entry(s, string(msg))
 	} else {
-		// server.Broadcast(msg)
-		const KEY = "chat_id"
-		// 查傳資料的房客在哪間房間
-		r := DefaultRoomManager.findUserRoom(id)
-		roomID := strconv.Itoa(r.roomID)
-		id := "room_" + roomID
-		server.BroadcastFilter(msg, func(session *melody.Session) bool {
-			compareID, _ := session.Get(KEY)
-			return compareID == "chat_id" || compareID == id
-		})
+		// 取得名字
+		id := s.Request.URL.Query().Get("id")
+		sentMessageTo(id, msg, "", "room")
 	}
 }
 
@@ -148,8 +105,7 @@ func firstConnect(session *melody.Session) {
 	id := session.Request.URL.Query().Get("id")
 
 	// 有人進入就登記他的id
-	const KEY = "user_id"
-	session.Set(KEY, id)
+	session.Set("user_id", id)
 
 	// 預設值金錢
 	money := 1000
@@ -159,10 +115,10 @@ func firstConnect(session *melody.Session) {
 	// 當旅館滿人進入
 	if len(DefaultRoomManager.UUIDMap) >= 8 {
 		fmt.Println("目前人數", len(DefaultRoomManager.UUIDMap), "超過人數(最多8人),無法入住")
-		server.BroadcastFilter(NewMessage("other", id, "因為客滿被踢出").GetByteMessage(), func(session *melody.Session) bool {
-			compareID, _ := session.Get(KEY)
-			return compareID == "user_id" || compareID == id
-		})
+
+		text := "因為客滿被踢出"
+		sentMessageTo(id, nil, text, "user")
+
 		time.Sleep(time.Millisecond * 300)
 		session.Close()
 		return
@@ -177,7 +133,8 @@ func firstConnect(session *melody.Session) {
 	room := DefaultRoomManager.work(tt)
 	// 以上成功之後顯示
 
-	server.Broadcast(NewMessage("other", id, "加入聊天室,房間號碼："+room+",時間："+t).GetByteMessage())
+	text := "加入聊天室,房間號碼：" + room + ",時間：" + t
+	sentMessageTo(id, nil, text, "room")
 
 	// 提醒退房,第二個是秒數
 	go remindToCheckOut(id, 30)
@@ -188,15 +145,10 @@ func firstConnect(session *melody.Session) {
 func sendLeaveRoom(session *melody.Session, i int, s string) error {
 
 	id := session.Request.URL.Query().Get("id")
-	const KEY = "chat_id"
 
 	if DefaultRoomManager.findUser(id) {
-		room := "room_" + strconv.Itoa(DefaultRoomManager.UUIDMap[id].room.roomID)
-
-		server.BroadcastFilter(NewMessage("other", id, "離開聊天室").GetByteMessage(), func(session *melody.Session) bool {
-			compareID, _ := session.Get(KEY)
-			return compareID == "chat_id" || compareID == room
-		})
+		text := "離開聊天室"
+		sentMessageTo(id, nil, text, "room")
 
 	} else {
 		// server.Broadcast(NewMessage("other", id, "因為客滿而離開聊天室").GetByteMessage())
@@ -204,4 +156,72 @@ func sendLeaveRoom(session *melody.Session, i int, s string) error {
 
 	DefaultRoomManager.SignOutMember(id)
 	return nil
+}
+
+func sentMessageTo(id string, msg []byte, text string, target string) {
+	var room string
+	var context []byte
+	var KEY string
+	switch target {
+	case "room":
+		KEY = "chat_id"
+		room = "room_" + strconv.Itoa(DefaultRoomManager.UUIDMap[id].room.roomID)
+		target = room
+		if msg == nil {
+			context = NewMessage("other", id, text).GetByteMessage()
+		} else {
+			context = msg
+		}
+	case "user":
+		KEY = "user_id"
+		target = id
+		context = NewMessage("other", id, text).GetByteMessage()
+	default:
+	}
+
+	server.BroadcastFilter(context, func(session *melody.Session) bool {
+		compareID, _ := session.Get(KEY)
+		return compareID == "chat_id" || compareID == target
+	})
+
+}
+
+// func sentMessageToChatRoom(id string, msg []byte) {
+// 	// server.Broadcast(msg)
+// 	room := "room_" + strconv.Itoa(DefaultRoomManager.UUIDMap[id].room.roomID)
+// 	server.BroadcastFilter(msg, func(session *melody.Session) bool {
+// 		compareID, _ := session.Get("chat_id")
+// 		return compareID == "chat_id" || compareID == room
+// 	})
+// }
+
+// func sentOtherToChatRoom(id string, text string) {
+// 	room := "room_" + strconv.Itoa(DefaultRoomManager.UUIDMap[id].room.roomID)
+// 	server.BroadcastFilter(NewMessage("other", id, text).GetByteMessage(), func(session *melody.Session) bool {
+// 		compareID, _ := session.Get("chat_id")
+// 		return compareID == "chat_id" || compareID == room
+// 	})
+// }
+
+// func sentOtherReturn(id string, text string) {
+// 	server.BroadcastFilter(NewMessage("other", id, text).GetByteMessage(), func(session *melody.Session) bool {
+// 		compareID, _ := session.Get("user_id")
+// 		return compareID == "user_id" || compareID == id
+// 	})
+// }
+
+func Entry(s *melody.Session, msg string) {
+
+	cmd := gjson.Get(string(msg), "content").String()
+	cmd = string(cmd[1:len(string(cmd))]) // 去除前面的斜線
+	fmt.Println(cmd)
+	fn, ok := cmdMap[cmd]
+	if !ok {
+		id := s.Request.URL.Query().Get("id") // 名字
+		sentMessageTo(id, nil, "指令錯誤,可輸入/help查看指令", "user")
+
+		return
+	}
+
+	fn(s, msg)
 }

@@ -20,6 +20,14 @@ type Manager struct {
 // DefaultRoomManager 預設的房間控制中心變數
 var DefaultRoomManager Manager
 
+var cmdMap = map[string]func(s *melody.Session, msg string) error{
+	"info":     infoHandler,
+	"室友":       roommateHandler,
+	"time":     checkOutTimeHandler,
+	"addmoney": addMoneyHandler,
+	"help":     helpHandler,
+}
+
 // 初始化一個管理員
 func InitManager() {
 	DefaultRoomManager = Manager{
@@ -129,48 +137,58 @@ func (m *Manager) findUserRoom(s string) *Room {
 }
 
 // 查詢用戶資訊
-func (m *Manager) infoHandler(s *melody.Session, KEY string) {
-	id := s.Request.URL.Query().Get("id")                         // 名字
-	user := DefaultRoomManager.UUIDMap[id]                        // 使用者資料
+func infoHandler(s *melody.Session, msg string) error {
+	id := s.Request.URL.Query().Get("id")       // 名字
+	user, err := DefaultRoomManager.UUIDMap[id] // 使用者資料
+	if !err {
+		return fmt.Errorf("找不到旅客資料")
+	}
 	money := strconv.Itoa(user.money)                             // 使用者的金錢
 	roomID := strconv.Itoa(user.room.roomID)                      // 使用者的房間
 	checkInTime := user.checkInTime.Format("2006-01-02 15:04:05") // 使用者入住的時間
 
-	server.BroadcastFilter(NewMessage("other", id, "名字:"+id+", 金錢:"+money+", 房間:"+roomID+", 入住時間:"+checkInTime).GetByteMessage(), func(session *melody.Session) bool {
-		compareID, _ := session.Get(KEY)
-		return compareID == "user_id" || compareID == id
-	})
+	// 將要傳送的文字組合
+	text := "名字:" + id + ", 金錢:" + money + ", 房間:" + roomID + ", 入住時間:" + checkInTime
+
+	sentMessageTo(id, nil, text, "user")
+
+	return nil
 }
 
 // 查詢用戶房間內所有成員
-func (m *Manager) roommateHandler(s *melody.Session, KEY string) {
-	id := s.Request.URL.Query().Get("id")  // 名字
-	user := DefaultRoomManager.UUIDMap[id] // 使用者資料
-	room := user.room                      // 使用者所在的房間
-	roomID := strconv.Itoa(room.roomID)    // 使用者的房間名稱
+func roommateHandler(s *melody.Session, msg string) error {
+	id := s.Request.URL.Query().Get("id")       // 名字
+	user, err := DefaultRoomManager.UUIDMap[id] // 使用者資料
+	if !err {
+		return fmt.Errorf("找不到旅客資料")
+	}
+	room := user.room                   // 使用者所在的房間
+	roomID := strconv.Itoa(room.roomID) // 使用者的房間名稱
 	var roomMateList string
 	for key, _ := range room.toristMap {
 		if id == key.name {
 			roomMateList += key.name + "(我), "
-
 		} else {
 			roomMateList += key.name + ", "
-
 		}
 	}
 
-	server.BroadcastFilter(NewMessage("other", id, "這間是:"+roomID+", 室友名單:"+roomMateList).GetByteMessage(), func(session *melody.Session) bool {
-		compareID, _ := session.Get(KEY)
-		return compareID == "user_id" || compareID == id
-	})
+	// 將要傳送的文字組合
+	text := "這間是:" + roomID + ", 室友名單:" + roomMateList
+	sentMessageTo(id, nil, text, "user")
+
+	return nil
 }
 
 // 查詢退房時間與剩餘秒數
-func (m *Manager) checkOutTimeHandler(s *melody.Session, KEY string) {
-	id := s.Request.URL.Query().Get("id")  // 名字
-	user := DefaultRoomManager.UUIDMap[id] // 使用者資料
-	roomCheckInTime := user.checkInTime    // 使用者入住時間
-	roomCheckOutTime := user.checkOutTime  // 使用者入住時間
+func checkOutTimeHandler(s *melody.Session, msg string) error {
+	id := s.Request.URL.Query().Get("id")       // 名字
+	user, err := DefaultRoomManager.UUIDMap[id] // 使用者資料
+	if !err {
+		return fmt.Errorf("找不到旅客資料")
+	}
+	roomCheckInTime := user.checkInTime   // 使用者入住時間
+	roomCheckOutTime := user.checkOutTime // 使用者入住時間
 	subM := roomCheckOutTime.Sub(time.Now())
 	var text string
 	// fmt.Println(subM.Seconds(), "秒")
@@ -179,38 +197,38 @@ func (m *Manager) checkOutTimeHandler(s *melody.Session, KEY string) {
 	} else {
 		text = fmt.Sprint("入住時間："+roomCheckInTime.Format("2006-01-02 15:04:05")+", 退房時間："+roomCheckOutTime.Format("2006-01-02 15:04:05"), ", 已經超過時間了")
 	}
-	server.BroadcastFilter(NewMessage("other", id, text).GetByteMessage(), func(session *melody.Session) bool {
-		compareID, _ := session.Get(KEY)
-		return compareID == "user_id" || compareID == id
-	})
 
+	sentMessageTo(id, nil, text, "user")
+	return nil
 }
 
 // 增加金錢
-func (m *Manager) addMoneyHandler(s *melody.Session, KEY string) {
-	id := s.Request.URL.Query().Get("id")  // 名字
-	user := DefaultRoomManager.UUIDMap[id] // 使用者資料
+func addMoneyHandler(s *melody.Session, msg string) error {
+	id := s.Request.URL.Query().Get("id")       // 名字
+	user, err := DefaultRoomManager.UUIDMap[id] // 使用者資料
+	if !err {
+		return fmt.Errorf("找不到旅客資料")
+	}
 	user.addMoney(1000)
 	money := strconv.Itoa(user.money) // 使用者的金錢
 
-	server.BroadcastFilter(NewMessage("other", id, "金錢已增加1000, 名字:"+id+", 金錢:"+money).GetByteMessage(), func(session *melody.Session) bool {
-		compareID, _ := session.Get(KEY)
-		return compareID == "user_id" || compareID == id
-	})
+	// 將要傳送的文字組合
+	text := "金錢已增加1000, 名字:" + id + ", 金錢:" + money
+	sentMessageTo(id, nil, text, "user")
+
+	return nil
 }
 
 // 查詢指令
-func (m *Manager) helpHandler(s *melody.Session, KEY string) {
+func helpHandler(s *melody.Session, msg string) error {
 	id := s.Request.URL.Query().Get("id") // 名字
 	info := "/info 查看自己資料,<br>"
 	roomMate := "/室友 查看自己房間內室友,<br>"
 	time := "/time 查看剩餘時間,時間到會提醒退房,<br>"
 	addmoney := "/addmoney 增加金錢1000,<br>"
 
-	helpList := fmt.Sprintf("%s%s%s%s", info, roomMate, time, addmoney)
+	text := fmt.Sprintf("%s%s%s%s", info, roomMate, time, addmoney)
+	sentMessageTo(id, nil, text, "user")
 
-	server.BroadcastFilter(NewMessage("other", id, helpList).GetByteMessage(), func(session *melody.Session) bool {
-		compareID, _ := session.Get(KEY)
-		return compareID == "user_id" || compareID == id
-	})
+	return nil
 }
