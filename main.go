@@ -37,10 +37,12 @@ func (m *Message) GetByteMessage() []byte {
 	return result
 }
 
+var server *melody.Melody
+
 func main() {
 	InitManager() //初始化控制中心
 
-	server := melody.New()
+	server = melody.New()
 
 	r := gin.Default()
 	r.LoadHTMLGlob("template/html/*")
@@ -54,126 +56,21 @@ func main() {
 		server.HandleRequest(c.Writer, c.Request)
 	})
 
-	//收到訊息
-	server.HandleMessage(func(s *melody.Session, msg []byte) {
-		// 取得名字
-		id := s.Request.URL.Query().Get("id")
-		// 顯示內容
-		cmd := gjson.Get(string(msg), "content").String()
-		fmt.Println(cmd)
-
-		//如果第一個是斜線
-		if string(cmd[0]) == "/" {
-			const KEY = "user_id"
-			// 執行指令
-			if string(cmd[1:len(string(cmd))]) == "info" {
-
-				DefaultRoomManager.infoHandler(server, s, KEY)
-
-			} else if string(cmd[1:len(string(cmd))]) == "室友" {
-
-				DefaultRoomManager.roommateHandler(server, s, KEY)
-
-			} else if string(cmd[1:len(string(cmd))]) == "time" {
-
-				DefaultRoomManager.checkOutTimeHandler(server, s, KEY)
-
-			} else {
-				server.BroadcastFilter(NewMessage("other", id, "指令錯誤").GetByteMessage(), func(session *melody.Session) bool {
-					compareID, _ := session.Get(KEY)
-					return compareID == "user_id" || compareID == id
-				})
-			}
-		} else {
-			// server.Broadcast(msg)
-			const KEY = "chat_id"
-			// 查傳資料的房客在哪間房間
-			r := DefaultRoomManager.findUserRoom(id)
-			aa := strconv.Itoa(r.roomID)
-			id := "room_" + aa
-			server.BroadcastFilter(msg, func(session *melody.Session) bool {
-				compareID, _ := session.Get(KEY)
-				return compareID == "chat_id" || compareID == id
-			})
-		}
-	})
-
 	// 連線開始
-	server.HandleConnect(func(session *melody.Session) {
-
-		// 取得名字
-		id := session.Request.URL.Query().Get("id")
-
-		// 有人進入就登記他的id
-		const KEY = "user_id"
-		session.Set(KEY, id)
-
-		// 預設值金錢
-		money := 1000
-		// 現在時間
-		t := time.Now().Format("2006-01-02 15:04:05")
-
-		// 當旅館滿人進入
-		if len(DefaultRoomManager.UUIDMap) >= 8 {
-			fmt.Println("目前人數", len(DefaultRoomManager.UUIDMap), "超過人數(最多8人),無法入住")
-			server.BroadcastFilter(NewMessage("other", id, "因為客滿被踢出").GetByteMessage(), func(session *melody.Session) bool {
-				compareID, _ := session.Get(KEY)
-				return compareID == "user_id" || compareID == id
-			})
-			time.Sleep(time.Millisecond * 300)
-			session.Close()
-			return
-		}
-
-		// 當有人連線時,將資料寫入旅客名單
-		tt := NewTourist(id, money, session)
-
-		// 交給控制中心,新增使用者
-		DefaultRoomManager.SignNewMember(tt)
-		// 加入房間的工作
-		room := DefaultRoomManager.work(tt)
-		// 以上成功之後顯示
-
-		server.Broadcast(NewMessage("other", id, "加入聊天室,房間號碼："+room+",時間："+t).GetByteMessage())
-
-		// 提醒退房,第三個是秒數
-		go remindToCheckOut(server, id, 30)
-
-	})
+	server.HandleConnect(firstConnect)
+	// 收到訊息
+	server.HandleMessage(getMessage)
 
 	// 連線結束
 	// melody 有提供 HandleClose 方法讓我們處理離線的 session，
 	// 我們這邊設定離線就發送一個 xxx 離開聊天室 的訊息給全部人
-	server.HandleClose(func(session *melody.Session, i int, s string) error {
-
-		id := session.Request.URL.Query().Get("id")
-		const KEY = "chat_id"
-
-		if DefaultRoomManager.findUser(id) {
-			room := "room_" + strconv.Itoa(DefaultRoomManager.UUIDMap[id].room.roomID)
-
-			server.BroadcastFilter(NewMessage("other", id, "離開聊天室").GetByteMessage(), func(session *melody.Session) bool {
-				compareID, _ := session.Get(KEY)
-				return compareID == "chat_id" || compareID == room
-			})
-
-		} else {
-			// server.Broadcast(NewMessage("other", id, "因為客滿而離開聊天室").GetByteMessage())
-		}
-
-		DefaultRoomManager.SignOutMember(id)
-		return nil
-	})
+	server.HandleClose(sendLeaveRoom)
 
 	// 監聽
 	r.Run(":5000")
 }
 
-func closeLineHandler() {
-
-}
-
-func remindToCheckOut(server *melody.Melody, id string, count int) {
+func remindToCheckOut(id string, count int) {
 	// 計時30秒,30秒後傳訊息給旅客,提醒退房
 	const KEY = "user_id"
 	DefaultRoomManager.UUIDMap[id].checkOutTime = DefaultRoomManager.UUIDMap[id].checkInTime.Add(time.Duration(count) * time.Second)
@@ -189,4 +86,118 @@ func remindToCheckOut(server *melody.Melody, id string, count int) {
 		compareID, _ := session.Get(KEY)
 		return compareID == "user_id" || compareID == id
 	})
+}
+
+// 收到訊息後處理
+func getMessage(s *melody.Session, msg []byte) {
+	// 取得名字
+	id := s.Request.URL.Query().Get("id")
+	// 顯示內容
+	cmd := gjson.Get(string(msg), "content").String()
+	fmt.Println(cmd)
+
+	//如果第一個是斜線
+	if string(cmd[0]) == "/" {
+		const KEY = "user_id"
+		commend := string(cmd[1:len(string(cmd))])
+		// 執行指令
+		if commend == "info" {
+
+			DefaultRoomManager.infoHandler(s, KEY)
+
+		} else if commend == "室友" {
+
+			DefaultRoomManager.roommateHandler(s, KEY)
+
+		} else if commend == "time" {
+
+			DefaultRoomManager.checkOutTimeHandler(s, KEY)
+
+		} else if commend == "addmoney" {
+
+			DefaultRoomManager.addMoneyHandler(s, KEY)
+
+		} else {
+			server.BroadcastFilter(NewMessage("other", id, "指令錯誤").GetByteMessage(), func(session *melody.Session) bool {
+				compareID, _ := session.Get(KEY)
+				return compareID == "user_id" || compareID == id
+			})
+		}
+	} else {
+		// server.Broadcast(msg)
+		const KEY = "chat_id"
+		// 查傳資料的房客在哪間房間
+		r := DefaultRoomManager.findUserRoom(id)
+		aa := strconv.Itoa(r.roomID)
+		id := "room_" + aa
+		server.BroadcastFilter(msg, func(session *melody.Session) bool {
+			compareID, _ := session.Get(KEY)
+			return compareID == "chat_id" || compareID == id
+		})
+	}
+}
+
+// 第一次連線處理
+func firstConnect(session *melody.Session) {
+
+	// 取得名字
+	id := session.Request.URL.Query().Get("id")
+
+	// 有人進入就登記他的id
+	const KEY = "user_id"
+	session.Set(KEY, id)
+
+	// 預設值金錢
+	money := 1000
+	// 現在時間
+	t := time.Now().Format("2006-01-02 15:04:05")
+
+	// 當旅館滿人進入
+	if len(DefaultRoomManager.UUIDMap) >= 8 {
+		fmt.Println("目前人數", len(DefaultRoomManager.UUIDMap), "超過人數(最多8人),無法入住")
+		server.BroadcastFilter(NewMessage("other", id, "因為客滿被踢出").GetByteMessage(), func(session *melody.Session) bool {
+			compareID, _ := session.Get(KEY)
+			return compareID == "user_id" || compareID == id
+		})
+		time.Sleep(time.Millisecond * 300)
+		session.Close()
+		return
+	}
+
+	// 當有人連線時,將資料寫入旅客名單
+	tt := NewTourist(id, money, session)
+
+	// 交給控制中心,新增使用者
+	DefaultRoomManager.SignNewMember(tt)
+	// 加入房間的工作
+	room := DefaultRoomManager.work(tt)
+	// 以上成功之後顯示
+
+	server.Broadcast(NewMessage("other", id, "加入聊天室,房間號碼："+room+",時間："+t).GetByteMessage())
+
+	// 提醒退房,第三個是秒數
+	go remindToCheckOut(id, 30)
+
+}
+
+// 離線時處理
+func sendLeaveRoom(session *melody.Session, i int, s string) error {
+
+	id := session.Request.URL.Query().Get("id")
+	const KEY = "chat_id"
+
+	if DefaultRoomManager.findUser(id) {
+		room := "room_" + strconv.Itoa(DefaultRoomManager.UUIDMap[id].room.roomID)
+
+		server.BroadcastFilter(NewMessage("other", id, "離開聊天室").GetByteMessage(), func(session *melody.Session) bool {
+			compareID, _ := session.Get(KEY)
+			return compareID == "chat_id" || compareID == room
+		})
+
+	} else {
+		// server.Broadcast(NewMessage("other", id, "因為客滿而離開聊天室").GetByteMessage())
+	}
+
+	DefaultRoomManager.SignOutMember(id)
+	return nil
 }

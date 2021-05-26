@@ -21,17 +21,17 @@ type Tourist struct {
 func NewTourist(id string, money int, session *melody.Session) *Tourist {
 
 	t := &Tourist{
-		name:         id,
-		money:        1000,
-		uuIdentity:   id,
-		checkInTime:  time.Now(),
-		session:      session,
+		name:        id,
+		money:       1000,
+		uuIdentity:  id,
+		checkInTime: time.Now(),
+		session:     session,
 	}
 
 	return t
 }
 
 // 新增金錢
-func (t *Tourist) addMoney() {
-
+func (t *Tourist) addMoney(money int) {
+	t.money += 1000
 }

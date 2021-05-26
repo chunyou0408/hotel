@@ -127,7 +127,7 @@ func (m *Manager) findUserRoom(s string) *Room {
 	return nil
 }
 
-func (m *Manager) infoHandler(server *melody.Melody, s *melody.Session, KEY string) {
+func (m *Manager) infoHandler(s *melody.Session, KEY string) {
 	id := s.Request.URL.Query().Get("id")                         // 名字
 	user := DefaultRoomManager.UUIDMap[id]                        // 使用者資料
 	money := strconv.Itoa(user.money)                             // 使用者的金錢
@@ -139,7 +139,7 @@ func (m *Manager) infoHandler(server *melody.Melody, s *melody.Session, KEY stri
 		return compareID == "user_id" || compareID == id
 	})
 }
-func (m *Manager) roommateHandler(server *melody.Melody, s *melody.Session, KEY string) {
+func (m *Manager) roommateHandler(s *melody.Session, KEY string) {
 	id := s.Request.URL.Query().Get("id")  // 名字
 	user := DefaultRoomManager.UUIDMap[id] // 使用者資料
 	room := user.room                      // 使用者所在的房間
@@ -161,7 +161,7 @@ func (m *Manager) roommateHandler(server *melody.Melody, s *melody.Session, KEY 
 	})
 }
 
-func (m *Manager) checkOutTimeHandler(server *melody.Melody, s *melody.Session, KEY string) {
+func (m *Manager) checkOutTimeHandler(s *melody.Session, KEY string) {
 	id := s.Request.URL.Query().Get("id")  // 名字
 	user := DefaultRoomManager.UUIDMap[id] // 使用者資料
 	roomCheckInTime := user.checkInTime    // 使用者入住時間
@@ -181,4 +181,14 @@ func (m *Manager) checkOutTimeHandler(server *melody.Melody, s *melody.Session, 
 
 }
 
-//
+func (m *Manager) addMoneyHandler(s *melody.Session, KEY string) {
+	id := s.Request.URL.Query().Get("id")  // 名字
+	user := DefaultRoomManager.UUIDMap[id] // 使用者資料
+	user.addMoney(1000)
+	money := strconv.Itoa(user.money) // 使用者的金錢
+
+	server.BroadcastFilter(NewMessage("other", id, "金錢已增加1000, 名字:"+id+", 金錢:"+money).GetByteMessage(), func(session *melody.Session) bool {
+		compareID, _ := session.Get(KEY)
+		return compareID == "user_id" || compareID == id
+	})
+}
