@@ -117,8 +117,12 @@ func getMessage(s *melody.Session, msg []byte) {
 
 			DefaultRoomManager.addMoneyHandler(s, KEY)
 
+		} else if commend == "help" {
+
+			DefaultRoomManager.helpHandler(s, KEY)
+
 		} else {
-			server.BroadcastFilter(NewMessage("other", id, "指令錯誤").GetByteMessage(), func(session *melody.Session) bool {
+			server.BroadcastFilter(NewMessage("other", id, "指令錯誤,可輸入/help查看指令").GetByteMessage(), func(session *melody.Session) bool {
 				compareID, _ := session.Get(KEY)
 				return compareID == "user_id" || compareID == id
 			})

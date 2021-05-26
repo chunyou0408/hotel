@@ -192,3 +192,18 @@ func (m *Manager) addMoneyHandler(s *melody.Session, KEY string) {
 		return compareID == "user_id" || compareID == id
 	})
 }
+
+func (m *Manager) helpHandler(s *melody.Session, KEY string) {
+	id := s.Request.URL.Query().Get("id") // 名字
+	info := "/info 查看自己資料,<br>"
+	roomMate := "/室友 查看自己房間內室友,<br>"
+	time := "/time 查看剩餘時間,時間到會提醒退房,<br>"
+	addmoney := "/addmoney 增加金錢1000,<br>"
+
+	helpList := fmt.Sprintf("%s%s%s%s", info, roomMate, time, addmoney)
+
+	server.BroadcastFilter(NewMessage("other", id, helpList).GetByteMessage(), func(session *melody.Session) bool {
+		compareID, _ := session.Get(KEY)
+		return compareID == "user_id" || compareID == id
+	})
+}
