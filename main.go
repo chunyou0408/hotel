@@ -179,7 +179,7 @@ func firstConnect(session *melody.Session) {
 
 	server.Broadcast(NewMessage("other", id, "加入聊天室,房間號碼："+room+",時間："+t).GetByteMessage())
 
-	// 提醒退房,第三個是秒數
+	// 提醒退房,第二個是秒數
 	go remindToCheckOut(id, 30)
 
 }

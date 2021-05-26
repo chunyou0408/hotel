@@ -119,6 +119,7 @@ func (m *Manager) findUser(s string) bool {
 	return true
 }
 
+// 查詢是不是有在房間內
 func (m *Manager) findUserRoom(s string) *Room {
 
 	if m.UUIDMap[s] != nil {
@@ -127,6 +128,7 @@ func (m *Manager) findUserRoom(s string) *Room {
 	return nil
 }
 
+// 查詢用戶資訊
 func (m *Manager) infoHandler(s *melody.Session, KEY string) {
 	id := s.Request.URL.Query().Get("id")                         // 名字
 	user := DefaultRoomManager.UUIDMap[id]                        // 使用者資料
@@ -139,6 +141,8 @@ func (m *Manager) infoHandler(s *melody.Session, KEY string) {
 		return compareID == "user_id" || compareID == id
 	})
 }
+
+// 查詢用戶房間內所有成員
 func (m *Manager) roommateHandler(s *melody.Session, KEY string) {
 	id := s.Request.URL.Query().Get("id")  // 名字
 	user := DefaultRoomManager.UUIDMap[id] // 使用者資料
@@ -161,6 +165,7 @@ func (m *Manager) roommateHandler(s *melody.Session, KEY string) {
 	})
 }
 
+// 查詢退房時間與剩餘秒數
 func (m *Manager) checkOutTimeHandler(s *melody.Session, KEY string) {
 	id := s.Request.URL.Query().Get("id")  // 名字
 	user := DefaultRoomManager.UUIDMap[id] // 使用者資料
@@ -181,6 +186,7 @@ func (m *Manager) checkOutTimeHandler(s *melody.Session, KEY string) {
 
 }
 
+// 增加金錢
 func (m *Manager) addMoneyHandler(s *melody.Session, KEY string) {
 	id := s.Request.URL.Query().Get("id")  // 名字
 	user := DefaultRoomManager.UUIDMap[id] // 使用者資料
@@ -193,6 +199,7 @@ func (m *Manager) addMoneyHandler(s *melody.Session, KEY string) {
 	})
 }
 
+// 查詢指令
 func (m *Manager) helpHandler(s *melody.Session, KEY string) {
 	id := s.Request.URL.Query().Get("id") // 名字
 	info := "/info 查看自己資料,<br>"
