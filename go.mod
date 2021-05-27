@@ -1,10 +1,10 @@
-module anonymous_chat
+module hotel
 
-go 1.14
+go 1.16
 
 require (
-	github.com/gin-gonic/gin v1.6.3
+	github.com/gin-gonic/gin v1.7.2
 	github.com/gorilla/websocket v1.4.2 // indirect
-	github.com/tidwall/gjson v1.8.0 // indirect
+	github.com/tidwall/gjson v1.8.0
 	gopkg.in/olahol/melody.v1 v1.0.0-20170518105555-d52139073376
 )
