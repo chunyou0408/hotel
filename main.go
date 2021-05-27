@@ -70,6 +70,8 @@ func main() {
 	r.Run(":5000")
 }
 
+// server.go ------------ ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓
+
 func remindToCheckOut(id string, count int) {
 	// 計時30秒,30秒後傳訊息給旅客,提醒退房
 
@@ -186,6 +188,8 @@ func sentMessageTo(id string, msg []byte, text string, target string) {
 
 }
 
+// 縮減為一個sentMessageTo
+
 // func sentMessageToChatRoom(id string, msg []byte) {
 // 	// server.Broadcast(msg)
 // 	room := "room_" + strconv.Itoa(DefaultRoomManager.UUIDMap[id].room.roomID)
@@ -225,3 +229,5 @@ func Entry(s *melody.Session, msg string) {
 
 	fn(s, msg)
 }
+
+// server.go ------------ 。

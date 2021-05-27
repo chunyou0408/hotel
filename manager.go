@@ -136,6 +136,9 @@ func (m *Manager) findUserRoom(s string) *Room {
 	return nil
 }
 
+
+// handler.go  ------------ ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓
+
 // 查詢用戶資訊
 func infoHandler(s *melody.Session, msg string) error {
 	id := s.Request.URL.Query().Get("id")       // 名字
@@ -232,3 +235,4 @@ func helpHandler(s *melody.Session, msg string) error {
 
 	return nil
 }
+// handler.go  ------------ 。
