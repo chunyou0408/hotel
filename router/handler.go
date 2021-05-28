@@ -34,7 +34,7 @@ func infoHandler(s *melody.Session, msg string) error {
 	// 將要傳送的文字組合
 	text := "名字:" + id + ", 金錢:" + money + ", 房間:" + roomID + ", 入住時間:" + checkInTime
 
-	ChatRoom.SentMessageTo(id, nil, text, "user")
+	SentMessageTo(id, nil, text, "user")
 
 	return nil
 }
@@ -59,7 +59,7 @@ func roommateHandler(s *melody.Session, msg string) error {
 
 	// 將要傳送的文字組合
 	text := "這間是:" + roomID + ", 室友名單:" + roomMateList
-	ChatRoom.SentMessageTo(id, nil, text, "user")
+	SentMessageTo(id, nil, text, "user")
 
 	return nil
 }
@@ -82,7 +82,7 @@ func checkOutTimeHandler(s *melody.Session, msg string) error {
 		text = fmt.Sprint("入住時間："+roomCheckInTime.Format("2006-01-02 15:04:05")+", 退房時間："+roomCheckOutTime.Format("2006-01-02 15:04:05"), ", 已經超過時間了")
 	}
 
-	ChatRoom.SentMessageTo(id, nil, text, "user")
+	SentMessageTo(id, nil, text, "user")
 	return nil
 }
 
@@ -98,7 +98,7 @@ func addMoneyHandler(s *melody.Session, msg string) error {
 
 	// 將要傳送的文字組合
 	text := "金錢已增加1000, 名字:" + id + ", 金錢:" + money
-	ChatRoom.SentMessageTo(id, nil, text, "user")
+	SentMessageTo(id, nil, text, "user")
 
 	return nil
 }
@@ -112,9 +112,35 @@ func helpHandler(s *melody.Session, msg string) error {
 	addmoney := "/addmoney 增加金錢1000,<br>"
 
 	text := fmt.Sprintf("%s%s%s%s", info, roomMate, time, addmoney)
-	ChatRoom.SentMessageTo(id, nil, text, "user")
+	SentMessageTo(id, nil, text, "user")
 
 	return nil
 }
 
-// handler.go  ------------ 。
+func SentMessageTo(id string, msg []byte, text string, target string) {
+	var room string
+	var context []byte
+	var KEY string
+	switch target {
+	case "room":
+		KEY = "chat_id"
+		room = "room_" + strconv.Itoa(ChatRoom.DefaultRoomManager.UUIDMap[id].Room.RoomID)
+		target = room
+		if msg == nil {
+			context = NewMessage("other", id, text).GetByteMessage()
+		} else {
+			context = msg
+		}
+	case "user":
+		KEY = "user_id"
+		target = id
+		context = NewMessage("other", id, text).GetByteMessage()
+	default:
+	}
+
+	server.BroadcastFilter(context, func(session *melody.Session) bool {
+		compareID, _ := session.Get(KEY)
+		return compareID == "chat_id" || compareID == target
+	})
+
+}

@@ -1,16 +1,10 @@
 package chatRoom
 
 import (
-	
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"sync"
-
-	"gopkg.in/olahol/melody.v1"
 )
-
-var Server *melody.Melody
 
 // Manager 控制中心
 type Manager struct {
@@ -18,31 +12,6 @@ type Manager struct {
 	roomsMapLock *sync.RWMutex       // 使用Map記得要一起用Lock
 	UUIDRWLocker *sync.RWMutex       // 使用者UUID清單讀寫鎖
 	UUIDMap      map[string]*Tourist // 使用者清單，key:uuid，value:使用者資料
-}
-
-// 設定訊息物件
-type Message struct {
-	Event   string `json:"event"`
-	Name    string `json:"name"`
-	Content string `json:"content"`
-}
-
-// 設定訊息方法
-func NewMessage(event, name, content string) *Message {
-	return &Message{
-		Event:   event,
-		Name:    name,
-		Content: content,
-	}
-}
-
-//由於透過 WebSocket 傳送訊息要使用 []byte 格式，因此這邊我們也將轉換的方法進行封裝
-func (m *Message) GetByteMessage() []byte {
-	result, err := json.Marshal(m)
-	if err != nil {
-		fmt.Println(err)
-	}
-	return result
 }
 
 // DefaultRoomManager 預設的房間控制中心變數
@@ -153,36 +122,4 @@ func (m *Manager) findUserRoom(s string) *Room {
 		return m.UUIDMap[s].Room
 	}
 	return nil
-}
-
-func SentMessageTo(id string, msg []byte, text string, target string) {
-	var room string
-	var context []byte
-	var KEY string
-	switch target {
-	case "room":
-		KEY = "chat_id"
-		room = "room_" + strconv.Itoa(DefaultRoomManager.UUIDMap[id].Room.RoomID)
-		target = room
-		if msg == nil {
-			context = NewMessage("other", id, text).GetByteMessage()
-		} else {
-			context = msg
-		}
-	case "user":
-		KEY = "user_id"
-		target = id
-		context = NewMessage("other", id, text).GetByteMessage()
-	default:
-	}
-
-	// 要如何使用router下的SendBroadcastFilter方法？？？
-
-	// SendBroadcastFilter(context,KEY,target)
-	
-	Server.BroadcastFilter(context, func(session *melody.Session) bool {
-		compareID, _ := session.Get(KEY)
-		return compareID == "chat_id" || compareID == target
-	})
-
 }

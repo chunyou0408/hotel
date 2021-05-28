@@ -1,6 +1,7 @@
 package router
 
 import (
+	"encoding/json"
 	ChatRoom "hotel/chatRoom"
 
 	"fmt"
@@ -12,11 +13,35 @@ import (
 	"gopkg.in/olahol/melody.v1"
 )
 
+// 設定訊息物件
+type Message struct {
+	Event   string `json:"event"`
+	Name    string `json:"name"`
+	Content string `json:"content"`
+}
+
+// 設定訊息方法
+func NewMessage(event, name, content string) *Message {
+	return &Message{
+		Event:   event,
+		Name:    name,
+		Content: content,
+	}
+}
+
+//由於透過 WebSocket 傳送訊息要使用 []byte 格式，因此這邊我們也將轉換的方法進行封裝
+func (m *Message) GetByteMessage() []byte {
+	result, err := json.Marshal(m)
+	if err != nil {
+		fmt.Println(err)
+	}
+	return result
+}
+
 var server *melody.Melody
 
 func Run() {
 	server = melody.New()
-	ChatRoom.Server = server
 
 	r := gin.Default()
 	r.LoadHTMLGlob("template/html/*")
@@ -56,7 +81,7 @@ func remindToCheckOut(id string, count int) {
 	timer.Stop() //時間到之後停止
 
 	text := id + "退房時間到了"
-	ChatRoom.SentMessageTo(id, nil, text, "user")
+	SentMessageTo(id, nil, text, "user")
 }
 
 // 收到訊息後處理
@@ -70,7 +95,7 @@ func getMessage(s *melody.Session, msg []byte) {
 	} else {
 		// 取得名字
 		id := s.Request.URL.Query().Get("id")
-		ChatRoom.SentMessageTo(id, msg, "", "room")
+		SentMessageTo(id, msg, "", "room")
 	}
 }
 
@@ -93,7 +118,7 @@ func firstConnect(session *melody.Session) {
 		fmt.Println("目前人數", len(ChatRoom.DefaultRoomManager.UUIDMap), "超過人數(最多8人),無法入住")
 
 		text := "因為客滿被踢出"
-		ChatRoom.SentMessageTo(id, nil, text, "user")
+		SentMessageTo(id, nil, text, "user")
 
 		time.Sleep(time.Millisecond * 300)
 		session.Close()
@@ -110,7 +135,8 @@ func firstConnect(session *melody.Session) {
 	// 以上成功之後顯示
 
 	text := "加入聊天室,房間號碼：" + room + ",時間：" + t
-	ChatRoom.SentMessageTo(id, nil, text, "room")
+
+	SentMessageTo(id, nil, text, "room")
 
 	// 提醒退房,第二個是秒數
 	go remindToCheckOut(id, 30)
@@ -124,7 +150,7 @@ func sendLeaveRoom(session *melody.Session, i int, s string) error {
 
 	if ChatRoom.DefaultRoomManager.FindUser(id) {
 		text := "離開聊天室"
-		ChatRoom.SentMessageTo(id, nil, text, "room")
+		SentMessageTo(id, nil, text, "room")
 
 	} else {
 		// server.Broadcast(NewMessage("other", id, "因為客滿而離開聊天室").GetByteMessage())
@@ -134,32 +160,6 @@ func sendLeaveRoom(session *melody.Session, i int, s string) error {
 	return nil
 }
 
-// 縮減為一個ChatRoom.SentMessageTo
-
-// func ChatRoom.SentMessageToChatRoom(id string, msg []byte) {
-// 	// server.Broadcast(msg)
-// 	room := "room_" + strconv.Itoa(ChatRoom.DefaultRoomManager.UUIDMap[id].room.roomID)
-// 	server.BroadcastFilter(msg, func(session *melody.Session) bool {
-// 		compareID, _ := session.Get("chat_id")
-// 		return compareID == "chat_id" || compareID == room
-// 	})
-// }
-
-// func sentOtherToChatRoom(id string, text string) {
-// 	room := "room_" + strconv.Itoa(ChatRoom.DefaultRoomManager.UUIDMap[id].room.roomID)
-// 	server.BroadcastFilter(NewMessage("other", id, text).GetByteMessage(), func(session *melody.Session) bool {
-// 		compareID, _ := session.Get("chat_id")
-// 		return compareID == "chat_id" || compareID == room
-// 	})
-// }
-
-// func sentOtherReturn(id string, text string) {
-// 	server.BroadcastFilter(NewMessage("other", id, text).GetByteMessage(), func(session *melody.Session) bool {
-// 		compareID, _ := session.Get("user_id")
-// 		return compareID == "user_id" || compareID == id
-// 	})
-// }
-
 func Entry(s *melody.Session, msg string) {
 
 	cmd := gjson.Get(string(msg), "content").String()
@@ -168,20 +168,10 @@ func Entry(s *melody.Session, msg string) {
 	fn, ok := CmdMap[cmd]
 	if !ok {
 		id := s.Request.URL.Query().Get("id") // 名字
-		ChatRoom.SentMessageTo(id, nil, "指令錯誤,可輸入/help查看指令", "user")
+		SentMessageTo(id, nil, "指令錯誤,可輸入/help查看指令", "user")
 
 		return
 	}
 
 	fn(s, msg)
 }
-
-// 外部如何使用
-// func SendBroadcastFilter(context []byte, KEY string, target string) {
-// 	server.BroadcastFilter(context, func(session *melody.Session) bool {
-// 		compareID, _ := session.Get(KEY)
-// 		return compareID == "chat_id" || compareID == target
-// 	})
-// }
-
-// server.go ------------ 。
